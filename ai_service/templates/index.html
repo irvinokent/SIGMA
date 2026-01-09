@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🚦 Smart Traffic (Deteksi + Fuzzy)</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="title-badge">
+            Smart Traffic • 
+            {% if result and result.model_type %}
+                {{ result.model_type|upper }} + Fuzzy
+            {% else %}
+                YOLO + Fuzzy
+            {% endif %}
+        </div>
+        <h1>🚦 Vehicle Detection 4 Persimpangan</h1>
+        <p class="subtitle">
+            Upload 4 gambar persimpangan, pilih model deteksi, sistem akan mendeteksi kendaraan, menghitung PCU,
+            lalu menghasilkan durasi hijau &amp; merah berbasis fuzzy logic untuk Raspberry Pi Pico.
+        </p>
+    </header>
+
+    <main class="app-main">
+
+        <form action="/process" method="post" enctype="multipart/form-data" class="card upload-card">
+            <div class="card-header">
+                <h2>📤 Upload 4 Gambar Persimpangan</h2>
+                <p class="card-caption">Setiap file merepresentasikan 1 arah persimpangan.</p>
+            </div>
+
+            <!-- PILIHAN MODEL DETEKSI -->
+            <div class="field" style="margin-bottom: 1rem;">
+                <label>Model Deteksi</label>
+                <select name="model_type" class="select-input">
+                    <option value="yolo"
+                        {% if not result or (result.model_type is defined and result.model_type == 'yolo') %}selected{% endif %}>
+                        YOLO (Best Model)
+                    </option>
+                    <option value="fcos"
+                        {% if result and result.model_type is defined and result.model_type == 'fcos' %}selected{% endif %}>
+                        FCOS
+                    </option>
+                    <option value="rtdetr"
+                        {% if result and result.model_type is defined and result.model_type == 'rtdetr' %}selected{% endif %}>
+                        RT-DETR
+                    </option>
+                </select>
+            </div>
+
+            <div class="grid-2 field-grid">
+                <div class="field">
+                    <label>UTARA</label>
+                    <div class="file-input">
+                        <span class="file-label">Pilih file</span>
+                        <input type="file" name="utara" required>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>TIMUR</label>
+                    <div class="file-input">
+                        <span class="file-label">Pilih file</span>
+                        <input type="file" name="timur" required>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>SELATAN</label>
+                    <div class="file-input">
+                        <span class="file-label">Pilih file</span>
+                        <input type="file" name="selatan" required>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>BARAT</label>
+                    <div class="file-input">
+                        <span class="file-label">Pilih file</span>
+                        <input type="file" name="barat" required>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn primary-btn">
+                🔎 Proses Deteksi
+            </button>
+        </form>
+
+        {% if result %}
+        <section class="section">
+            <div class="section-header">
+                <h2>
+                    📸 Hasil Deteksi 
+                    {% if result.model_type %}
+                        {{ result.model_type|upper }}
+                    {% else %}
+                        YOLO
+                    {% endif %}
+                </h2>
+                <p class="section-caption">Visualisasi bounding box tiap arah persimpangan.</p>
+            </div>
+
+            <div class="grid-2">
+                {% for name, path in result.images.items() %}
+                    <div class="card image-card">
+                        <div class="image-header">
+                            <span class="chip">{{ name }}</span>
+                        </div>
+                        <img src="{{ path }}" class="preview-img" alt="Deteksi {{ name }}">
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2>📊 Tabel PCU</h2>
+                <p class="section-caption">Perhitungan PCU berdasarkan jumlah kendaraan.</p>
+            </div>
+
+            <div class="card table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Arah</th>
+                            <th>PCU</th>
+                            <th>Car</th>
+                            <th>Motor</th>
+                            <th>Bicycle</th>
+                            <th>Kendaraan Besar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row, vals in result.pcu_table.items() %}
+                        <tr>
+                            <td>{{ row }}</td>
+                            <td>{{ vals["PCU_total"] }}</td>
+                            <td>{{ vals["car"] }}</td>
+                            <td>{{ vals["motorcycle"] }}</td>
+                            <td>{{ vals["bicycle"] }}</td>
+                            <td>{{ vals["kendaraan_besar"] }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <h2>⏱ Durasi Hijau &amp; Merah (Fuzzy Logic)</h2>
+                <p class="section-caption">Output timing yang akan dikirim ke Raspberry Pi Pico.</p>
+            </div>
+
+            <div class="card table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Arah</th>
+                            <th>Hijau (detik)</th>
+                            <th>Merah (detik)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row, vals in result.fuzzy_table.items() %}
+                        <tr>
+                            <td>{{ row }}</td>
+                            <td>{{ vals["Green_time"] }}</td>
+                            <td>{{ vals["Red_time"] }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+    </main>
+
+    <footer class="app-footer">
+        <span class="footer-dot"></span>
+        <span>Edge-AI • Deteksi Multi-Model • Fuzzy • Raspberry Pi Pico</span>
+    </footer>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const fileInputs = document.querySelectorAll('.file-input input[type="file"]');
+    
+        fileInputs.forEach(function (input) {
+            const wrapper = input.closest('.file-input');
+            const labelSpan = wrapper.querySelector('.file-label');
+            const defaultText = labelSpan.textContent;
+    
+            input.addEventListener('change', function () {
+                if (input.files && input.files.length > 0) {
+                    labelSpan.textContent = input.files[0].name;
+                } else {
+                    labelSpan.textContent = defaultText;
+                }
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
