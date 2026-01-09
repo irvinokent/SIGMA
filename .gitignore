@@ -6,3 +6,4 @@ Thumbs.db
 venv/
 __pycache__/
 .env
+key_pair.pem
